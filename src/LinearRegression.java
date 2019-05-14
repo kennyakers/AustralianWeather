@@ -81,27 +81,45 @@ public class LinearRegression {
         public String toString() {
             return this.field + " (" + this.numValues + " values): µ = " + String.format("%.2f", this.mean) + " | σ = " + String.format("%.2f", this.stdDev);
         }
+    }
 
+    public static enum Regularization {
+        LASSO(1.0),
+        RIDGE(2.0);
+
+        private double value = 1;
+
+        Regularization(double value) {
+            this.value = value;
+        }
+
+        public double getValue() {
+            return this.value;
+        }
     }
 
     private Matrix dataMatrix;
     private double[] weights;
     private Vector outputs;
+    private FeatureStats[] featureStats;
+    private Regularization q;
 
-    private final double learningRate;
+    private final double learningRate; 
+    private final double regularizationPenalty;
 
     private boolean skippedEpoch;
     private boolean skippedTraining;
 
-    private FeatureStats[] featureStats;
-
-    public LinearRegression(ArrayList<Weather.DataPoint> data, double learningRate, int epochs) {
+    public LinearRegression(ArrayList<Weather.DataPoint> data, double learningRate, int epochs, Regularization type, double regPenalty) {
 
         int NUM_FEATURES = 21;
+        this.q = type;
+        this.learningRate = learningRate;
+        this.regularizationPenalty = regPenalty;
 
         this.skippedEpoch = false;
         this.skippedTraining = false;
-        this.featureStats = new FeatureStats[NUM_FEATURES + 1];
+        this.featureStats = new FeatureStats[NUM_FEATURES + 1]; // +1 for the plane constant
         for (int i = 0; i < this.featureStats.length; i++) {
             this.featureStats[i] = new FeatureStats(Weather.fields[i]);
         }
@@ -143,8 +161,6 @@ public class LinearRegression {
                 System.out.println(feature);
             }
         }
-
-        this.learningRate = learningRate;
 
         if (Main.DEBUG) {
             System.out.println("Original weights: " + Arrays.toString(this.weights));
@@ -189,15 +205,14 @@ public class LinearRegression {
     }
 
     public double[] processDataPoint(Weather.DataPoint dataPoint) {
-        double[] processed = {
-            1.0, // Dummy variable xj0
+        double[] processed = {1.0, // Dummy variable xj0
             dataPoint.date().toNumber(),
             this.getLocationNumber(dataPoint.location()),
             dataPoint.minTemperature(),
             dataPoint.maxTemperature(),
             dataPoint.rainfall(),
-            dataPoint.hoursOfSunshine(), //
-            dataPoint.evaporationRate(), //
+            dataPoint.hoursOfSunshine(),
+            dataPoint.evaporationRate(),
             dataPoint.windGustSpeed(),
             dataPoint.windGustDirection().heading(),
             dataPoint.morningTemperature(),
@@ -234,7 +249,7 @@ public class LinearRegression {
         return Arrays.asList(Weather.locations).indexOf(location);
     }
 
-    // wi ← wi + α SUM(xj,i(yj − hw(xj))
+    // wi ← wi + α SUM(xj,i(yj − hw(xj))^2  + λ SUM(|wj|^q)
     public void updateWeights() {
         Console console = System.console();
         double[] newWeights = new double[this.weights.length];
@@ -242,7 +257,8 @@ public class LinearRegression {
             if (Main.DEBUG_WEIGHTS && !this.skippedEpoch && !this.skippedTraining) {
                 System.out.println("Updating the weight for " + this.featureStats[i].getField());
             }
-            double summation = 0;
+            double errorSum = 0.0;
+            double regularizationSum = 0.0;
             for (int j = 0; j < this.dataMatrix.numDataPoints(); j++) { // For each data point for that feature
                 double hW = this.evaluateHyperplane(this.dataMatrix.getDataPoint(j));
                 double yj = this.outputs.get(j);
@@ -250,7 +266,9 @@ public class LinearRegression {
                 if (Double.isNaN(hW) || Double.isNaN(yj) || Double.isNaN(xji)) {
                     throw new IllegalArgumentException("NaN while updating weights");
                 }
-                summation += (yj - hW) * xji;
+                //errorSum += Math.pow(((yj - hW) * xji), 2.0); // Squared error (1)
+                errorSum += ((yj - hW) * xji);
+                regularizationSum += Math.pow(Math.abs(this.weights[i]), this.q.getValue()); // Regularization (2)
                 if (Main.DEBUG_WEIGHTS && !this.skippedEpoch && !this.skippedTraining) {
                     System.out.println("hW = " + hW);
                     System.out.println("yj = " + yj);
@@ -260,10 +278,10 @@ public class LinearRegression {
                 }
             }
             if (Main.DEBUG_WEIGHTS && !this.skippedEpoch && !this.skippedTraining) {
-                System.out.println("Summation: " + summation);
-                System.out.println("(" + this.featureStats[i].getField() + "): " + "Updating " + this.weights[i] + " to " + (this.weights[i] + (this.learningRate * summation)) + "\n\n");
+                System.out.println("Summation: " + errorSum);
+                System.out.println("(" + this.featureStats[i].getField() + "): " + "Updating " + this.weights[i] + " to " + (this.weights[i] + (this.learningRate * errorSum)) + "\n\n");
             }
-            newWeights[i] = this.weights[i] + (this.learningRate * summation);
+            newWeights[i] = this.weights[i] + (this.learningRate * errorSum) + (this.regularizationPenalty * regularizationSum);
 
             if (Main.DEBUG_WEIGHTS && !this.skippedEpoch && !this.skippedTraining) {
                 String line = getLine(console);

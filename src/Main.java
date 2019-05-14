@@ -10,6 +10,9 @@ public class Main {
     private static int trainSize = 100;
     private static int epochs = 10;
     private static int pointToPredict = 0;
+    private static double learningRate = 0.1;
+    private static double regularizationPenalty = 0.8;
+    private static LinearRegression.Regularization regularizationType = LinearRegression.Regularization.LASSO;
 
     public static void main(String[] args) {
         ArrayList<Weather.DataPoint> dataset = new ArrayList<>();
@@ -25,6 +28,9 @@ public class Main {
                     case "-debug-weights":
                         DEBUG_WEIGHTS = true;
                         break;
+                    case "-ridge":
+                        regularizationType = LinearRegression.Regularization.RIDGE;
+                        break;
                     case "-train":
                         try {
                             trainSize = Integer.parseInt(args[++i]);
@@ -37,6 +43,20 @@ public class Main {
                             epochs = Integer.parseInt(args[++i]);
                         } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
                             System.out.println("Number of epochs not specified. Defaulting to " + epochs);
+                        }
+                        break;
+                    case "-learn":
+                        try {
+                            learningRate = Double.parseDouble(args[++i]);
+                        } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
+                            System.out.println("Learning rate not specified. Defaulting to " + learningRate);
+                        }
+                        break;
+                    case "-penalty":
+                        try {
+                            regularizationPenalty = Double.parseDouble(args[++i]);
+                        } catch (NumberFormatException | ArrayIndexOutOfBoundsException e) {
+                            System.out.println("Regularization penalty not specified. Defaulting to " + regularizationPenalty);
                         }
                         break;
                     case "-predict":
@@ -72,7 +92,7 @@ public class Main {
         Weather.DataPoint toEvaluate = dataset.get(pointToPredict);
         System.out.println("Point to predict: " + toEvaluate + "\n");
 
-        LinearRegression prediction = new LinearRegression(dataset, 0.1, epochs);
+        LinearRegression prediction = new LinearRegression(dataset, learningRate, epochs, regularizationType, regularizationPenalty);
 
         System.out.println("Prediction: " + (prediction.rainTomorrow(toEvaluate) ? "Rain" : "No rain") + "\tAnswer: " + (toEvaluate.rainTomorrow() ? "Rain" : "No rain" + "\n"));
     }

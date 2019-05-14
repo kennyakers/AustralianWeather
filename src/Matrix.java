@@ -187,7 +187,7 @@ public class Matrix {
     public double getAt(int i, int j) {
         return this.matrix[i][j];
     }
-   
+
     public double[][] getMatrix() {
         return this.matrix;
     }
@@ -195,7 +195,7 @@ public class Matrix {
     public void setAt(int i, int j, double value) {
         this.matrix[i][j] = value;
     }
-    
+
     public void setRow(int row, Vector input) {
         for (int i = 0; i < this.matrix[row].length; i++) {
             this.setAt(row, i, input.get(i));
